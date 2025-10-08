@@ -2,6 +2,7 @@ import { HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { Categoria } from '../models/categoria';
+import { LocalizadorResponse } from '../models/localizador';
 import { Marca } from '../models/marca';
 import { PagedResponse } from '../models/paged-response';
 import { Repuesto } from '../models/repuesto';
@@ -38,5 +39,13 @@ export class RepuestosService {
         formData.append('file', file);
 
         return this.restService.upload('importaciones/catalogo', formData);
+    }
+
+    buscarRepuestoEnRed(numeroPieza: string, tallerId: number): Observable<LocalizadorResponse> {
+        const params = new HttpParams()
+            .set('numero_pieza', numeroPieza)
+            .set('taller_id', String(tallerId));
+
+        return this.restService.get<LocalizadorResponse>('localizador/repuestos', params);
     }
 }

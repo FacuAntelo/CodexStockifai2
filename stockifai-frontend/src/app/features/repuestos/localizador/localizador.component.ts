@@ -1,16 +1,20 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import * as L from 'leaflet';
 
+import { LocalizadorResponse, TallerConStockResponse } from '../../../core/models/localizador';
+import { RepuestosService } from '../../../core/services/repuestos.service';
+
 type TallerConStock = {
   id: number;
   nombre: string;
   direccion: string;
-  lat: number;
-  lng: number;
+  lat: number | null;
+  lng: number | null;
   cantidad: number;
-  telefono?: string;     // formato local para mostrar
-  telefonoE164?: string; // para WhatsApp (ej: 5491160012345)
+  telefono?: string;
+  telefonoE164?: string | null;
   email?: string;
+  distanciaKm?: number | null;
 };
 
 @Component({
@@ -22,9 +26,14 @@ export class LocalizadorComponent implements OnInit, OnDestroy {
   query = '';
   cargando = false;
   resultados: TallerConStock[] = [];
+  tallerId = 1;
+
+  private origen?: LocalizadorResponse['taller_origen'];
 
   private map?: L.Map;
   private markers: L.Marker[] = [];
+
+  constructor(private repuestosService: RepuestosService) {}
 
   ngOnInit(): void {
     setTimeout(() => this.initMap(), 0);
@@ -33,72 +42,28 @@ export class LocalizadorComponent implements OnInit, OnDestroy {
   buscar(): void {
     if (!this.query.trim()) return;
     this.cargando = true;
-
-    // ⚠️ MOCK para probar UI (API comentada)
-    setTimeout(() => {
-      this.resultados = [
-        {
-          id: 1,
-          nombre: 'Taller Central',
-          direccion: 'Av. Rivadavia 1234, CABA',
-          lat: -34.6083,
-          lng: -58.4097,
-          cantidad: 4,
-          telefono: '11-5555-1234',
-          telefonoE164: '5491155551234',
-          email: 'central@talleres.com',
+    this.repuestosService
+      .buscarRepuestoEnRed(this.query.trim(), this.tallerId)
+      .subscribe({
+        next: (resp) => {
+          this.origen = resp?.taller_origen;
+          this.resultados = (resp?.talleres ?? []).map((t) => this.mapTaller(t));
+          this.cargando = false;
+          this.renderMarkers();
         },
-        {
-          id: 2,
-          nombre: 'Mecánica del Sur',
-          direccion: 'Calle 50 742, La Plata',
-          lat: -34.9215,
-          lng: -57.9545,
-          cantidad: 2,
-          telefono: '221-444-7788',
-          telefonoE164: '542214447788',
-          email: 'contacto@mecanicadelsur.com',
+        error: (err) => {
+          console.error('Error al buscar localizador', err);
+          this.resultados = [];
+          this.cargando = false;
+          this.renderMarkers();
         },
-        {
-          id: 3,
-          nombre: 'Taller Norte',
-          direccion: 'Av. Sarmiento 3500, Rosario',
-          lat: -32.9575,
-          lng: -60.6394,
-          cantidad: 5,
-          telefono: '341-555-6677',
-          telefonoE164: '543415556677',
-          email: 'ventas@tallernorte.com',
-        },
-        {
-          id: 4,
-          nombre: 'Garage Oeste',
-          direccion: 'Av. San Martín 255, Morón',
-          lat: -34.6532,
-          lng: -58.6218,
-          cantidad: 1,
-          telefono: '11-4667-8899',
-          telefonoE164: '5491146678899',
-          email: 'hola@garageoeste.com',
-        },
-      ];
-      this.cargando = false;
-      this.renderMarkers();
-    }, 500);
-
-    /*
-    // 🔜 Cuando conectes la API real, descomentá y ajustá:
-    this.cargando = true;
-    this.miServicio.buscarTalleresPorNumeroParte(this.query.trim()).subscribe({
-      next: data => { this.resultados = data ?? []; this.cargando = false; this.renderMarkers(); },
-      error: err => { this.resultados = []; this.cargando = false; console.error(err); }
-    });
-    */
+      });
   }
 
   limpiar(): void {
     this.query = '';
     this.resultados = [];
+    this.origen = undefined;
     this.markers.forEach(m => m.remove());
     this.markers = [];
     this.map?.setView([-34.6037, -58.3816], 12);
@@ -108,6 +73,21 @@ export class LocalizadorComponent implements OnInit, OnDestroy {
     const numero = t.telefonoE164 ?? '';
     const texto = `Hola, consulto por disponibilidad del repuesto ${this.query.trim()}`;
     return `https://wa.me/${numero}?text=${encodeURIComponent(texto)}`;
+  }
+
+  private mapTaller(item: TallerConStockResponse): TallerConStock {
+    return {
+      id: item.id,
+      nombre: item.nombre,
+      direccion: item.direccion,
+      lat: item.lat ?? null,
+      lng: item.lng ?? null,
+      cantidad: item.stock_total,
+      telefono: item.telefono ?? undefined,
+      telefonoE164: item.telefono_e164 ?? undefined,
+      email: item.email ?? undefined,
+      distanciaKm: item.distancia_km ?? undefined,
+    };
   }
 
   private initMap(): void {
@@ -126,12 +106,31 @@ export class LocalizadorComponent implements OnInit, OnDestroy {
     this.markers.forEach(m => m.remove());
     this.markers = [];
 
-    if (!this.resultados.length) return;
-
     const bounds = L.latLngBounds([]);
+    if (this.origen?.lat != null && this.origen?.lng != null) {
+      const origenMarker = L.marker([this.origen.lat, this.origen.lng], {
+        icon: L.icon({
+          iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+          shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+        }),
+      }).bindPopup(`<b>${this.origen.nombre}</b><br/>Taller origen`);
+      origenMarker.addTo(this.map);
+      this.markers.push(origenMarker);
+      bounds.extend([this.origen.lat, this.origen.lng]);
+    }
+
+    if (!this.resultados.length) {
+      if (bounds.isValid()) {
+        this.map.fitBounds(bounds.pad(0.2));
+      }
+      return;
+    }
+
     this.resultados.forEach(t => {
+      if (t.lat == null || t.lng == null) return;
+      const distancia = t.distanciaKm != null ? `<br/>Distancia: ${t.distanciaKm} km` : '';
       const marker = L.marker([t.lat, t.lng]).bindPopup(
-        `<b>${t.nombre}</b><br/>${t.direccion}<br/>Unidades: ${t.cantidad}`
+        `<b>${t.nombre}</b><br/>${t.direccion}<br/>Unidades: ${t.cantidad}${distancia}`
       );
       marker.addTo(this.map!);
       this.markers.push(marker);
