@@ -1,0 +1,162 @@
+<div class="card shadow-sm">
+    <div class="card-body p-3">
+        <div class="row">
+            <div class="col-md-12 col-lg-12 d-flex justify-content-end">
+                <button type="button" class="btn btn-primary ms-auto d-flex align-items-center gap-1"
+                    data-bs-toggle="modal" data-bs-target="#importarCatalogoModal" (click)="openImportarModal()">
+                    <i class="fa fa-file-export me-1"></i>
+                    Importar Catalogo
+                </button>
+            </div>
+        </div>
+        <hr>
+        <form class="mb-4">
+            <div class="row gy-1">
+                <div class="col-md-6 col-lg-4">
+                    <label for="searchText" class="form-label">Filtrar por</label>
+                    <input type="text" class="form-control form-control-sm" id="searchText"
+                        [(ngModel)]="filtro.searchText" name="searchText" placeholder="SKU, nombre..."
+                        (ngModelChange)="onSearchChange($event)" />
+                </div>
+
+                <div class="col-md-3 col-lg-3">
+                    <label for="marca" class="form-label">Marca</label>
+                    <select class="form-select form-select-sm" id="marca" [(ngModel)]="filtro.idMarca" name="marca"
+                        (ngModelChange)="filtrar()">
+                        <option value="">Todos</option>
+                        <option *ngFor="let marca of marcas" [value]="marca.id">{{ marca.nombre }}
+                        </option>
+                    </select>
+                </div>
+
+                <div class="col-md-3 col-lg-3">
+                    <label for="categoria" class="form-label">Categoria</label>
+                    <select class="form-select form-select-sm" id="categoria" [(ngModel)]="filtro.idCategoria"
+                        name="categoria" (ngModelChange)="filtrar()">
+                        <option value="">Todos</option>
+                        <option *ngFor="let categoria of categorias" [value]="categoria.id">{{ categoria.nombre }}
+                        </option>
+                    </select>
+                </div>
+
+                <div class="col-md-1 col-lg-1 mt-auto ms-auto">
+                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                        (click)="resetearFiltros()">Resetear</button>
+                </div>
+            </div>
+        </form>
+
+
+
+
+        <div *ngIf="loading" class="alert alert-info d-flex justify-content-center align-items-center mb-2 p-2">
+            <div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>
+            <span>Cargando…</span>
+        </div>
+
+        <div *ngIf="errorMessage" class="alert alert-danger alert-dismissible fade show mt-2 mb-2 p-2" role="alert">
+            <span class="text-sm">{{ errorMessage }}</span>
+        </div>
+
+        <div class="table-responsive" *ngIf="!loading">
+            <table class="table table-bordered table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>SKU</th>
+                        <th>Nombre</th>
+                        <th>Marca</th>
+                        <th>Categoria</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr *ngFor="let repuesto of repuestos">
+                        <td>{{ repuesto.numero_pieza }}</td>
+                        <td>{{ repuesto.descripcion }}</td>
+                        <td>{{ repuesto.marca?.nombre }}</td>
+                        <td>{{ repuesto.categoria?.nombre }}</td>
+                    </tr>
+                    <tr *ngIf="repuestos.length === 0">
+                        <td colspan="6" class="text-center text-muted py-3">No hay repuestos para mostrar.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="d-flex align-items-center justify-content-end py-2 mt-2">
+
+                <div class="d-flex align-items-center gap-2">
+                    <select class="form-select form-select-sm" style="width:auto" [ngModel]="pageSize"
+                        (ngModelChange)="onPageSizeChange($event)">
+                        <option [ngValue]="10">10</option>
+                        <option [ngValue]="20">20</option>
+                        <option [ngValue]="50">50</option>
+                        <option [ngValue]="100">100</option>
+                    </select>
+
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item" [class.disabled]="page===1">
+                            <button class="page-link" (click)="goPreviousPage()" [disabled]="page===1">Anterior</button>
+                        </li>
+                        <li class="page-item" *ngFor="let item of paginationItems; let i = index;"
+                            [class.active]="item===page" [class.disabled]="item==='…'">
+                            <span class="page-link" *ngIf="item==='…'">&hellip;</span>
+                            <button class="page-link" *ngIf="item!=='…'" (click)="goToPage(+item)">{{ item }}</button>
+                        </li>
+                        <li class="page-item" [class.disabled]="page===totalPages">
+                            <button class="page-link" (click)="goNextPage()"
+                                [disabled]="page===totalPages">Siguiente</button>
+                        </li>
+                    </ul>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="importarCatalogoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <form class="modal-content" #form="ngForm" (ngSubmit)="submitArchivo()">
+            <div class="modal-header">
+                <h5 class="modal-title">Importar catalogo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar" (click)="closeImportModal()"></button>
+            </div>
+
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Archivo</label>
+                    <input type="file" accept=".csv, .xlsx" class="form-control" name="file"
+                        (change)="onFileChange($event)" required />
+                    <div class="invalid-feedback d-block" *ngIf="form.submitted && !archivo">
+                        Seleccioná un archivo csv o xlsx.
+                    </div>
+                    <div class="form-text">
+                        Formato: <code>numero de pieza,descripcion,marca_id,categoria_id</code>
+                    </div>
+                </div>
+
+                <div *ngIf="errorMsg" class="alert alert-danger mt-3">{{ errorMsg }}</div>
+                <div *ngIf="successMsg" class="alert alert-success mt-3">{{ successMsg }}</div>
+                <div *ngIf="erroresImport && erroresImport.length > 0" class="alert alert-danger mt-3">
+                    <h6 class="mb-2">Repuestos rechazados ({{erroresImport.length}})</h6>
+                    <ul class="mb-0 ps-3 small">
+                        <li *ngFor="let error of erroresImport">
+                            <strong>Fila {{ error.fila ?? '—' }}:</strong> {{ error.motivo }}
+                        </li>
+                    </ul>
+                </div>
+
+
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" (click)="closeImportModal(false)">Cancelar</button>
+                <button type="button" class="btn btn-primary" (click)="submitArchivo()"
+                    [disabled]="!archivo || loadingArchivo">
+                    <div *ngIf="loadingArchivo" class="spinner-border spinner-border-sm me-2" role="status"
+                        aria-hidden="true"></div>
+                    {{ loadingArchivo ? 'Importando...' : 'Importar' }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
