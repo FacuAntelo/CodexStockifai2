@@ -28,6 +28,9 @@
                         <div class="me-3">
                             <div class="fw-semibold nombre">{{ t.nombre }}</div>
                             <div class="text-muted small">{{ t.direccion }}</div>
+                            <div class="text-muted small" *ngIf="t.distanciaKm != null">
+                                Distancia: {{ t.distanciaKm }} km
+                            </div>
                             <div class="text-muted small mt-1">
                                 <span *ngIf="t.telefono">Tel: {{ t.telefono }}</span>
                                 <span *ngIf="t.email"> &nbsp; Email: {{ t.email }}</span>
